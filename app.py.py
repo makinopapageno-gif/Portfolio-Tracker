@@ -5,14 +5,19 @@ import os
 import datetime
 
 st.set_page_config(layout="wide")
-st.title("?? Interactive Portfolio Tracker")
+st.title("📈 Interactive Portfolio Tracker")
 
 DATA_FILE = "portfolio_data.csv"
 
 # --- DATA STORAGE SETUP ---
 def load_data():
     if os.path.exists(DATA_FILE):
-        df = pd.read_csv(DATA_FILE)
+        # NEW: Bulletproof encoding fallback for special characters (£, ¥, etc.)
+        try:
+            df = pd.read_csv(DATA_FILE, encoding='utf-8')
+        except UnicodeDecodeError:
+            df = pd.read_csv(DATA_FILE, encoding='latin1')
+            
         if 'Purchase Price ($)' in df.columns:
             df.rename(columns={'Purchase Price ($)': 'Purchase Price'}, inplace=True)
         if 'Purchase Date' not in df.columns:
@@ -26,16 +31,16 @@ def load_data():
         return pd.DataFrame(columns=['Ticker', 'Type', 'Shares', 'Purchase Price', 'Transaction Fee', 'Purchase Date'])
 
 def save_data(df):
-    df.to_csv(DATA_FILE, index=False)
+    df.to_csv(DATA_FILE, index=False, encoding='utf-8')
 
 if 'portfolio' not in st.session_state:
     st.session_state.portfolio = load_data()
 
 # --- SIDEBAR: Settings & Inputs ---
-st.sidebar.header("?? Settings")
+st.sidebar.header("⚙️ Settings")
 base_currency = st.sidebar.selectbox("Display Portfolio In:", ["USD", "GBP", "EUR", "JPY", "CHF", "CNY", "SGD", "HKD", "INR"])
 
-currency_symbols = {"USD": "$", "GBP": "�", "EUR": "�", "JPY": "�", "CHF": "CHF ", "CNY": "CN�", "SGD": "S$", "HKD": "HK$", "INR": "?"}
+currency_symbols = {"USD": "$", "GBP": "£", "EUR": "€", "JPY": "¥", "CHF": "CHF ", "CNY": "CN¥", "SGD": "S$", "HKD": "HK$", "INR": "₹"}
 sym = currency_symbols.get(base_currency, f"{base_currency} ")
 
 st.sidebar.markdown("---")
@@ -72,7 +77,13 @@ uploaded_file = st.sidebar.file_uploader("Upload your portfolio", type=["csv"])
 
 if uploaded_file is not None:
     try:
-        uploaded_df = pd.read_csv(uploaded_file)
+        # NEW: Bulletproof encoding fallback for uploaded files
+        try:
+            uploaded_df = pd.read_csv(uploaded_file, encoding='utf-8')
+        except UnicodeDecodeError:
+            uploaded_file.seek(0) # Reset the file pointer to the beginning
+            uploaded_df = pd.read_csv(uploaded_file, encoding='latin1')
+            
         if 'Purchase Price ($)' in uploaded_df.columns:
             uploaded_df.rename(columns={'Purchase Price ($)': 'Purchase Price'}, inplace=True)
         if 'Purchase Date' not in uploaded_df.columns:
@@ -93,11 +104,11 @@ if uploaded_file is not None:
         else:
             st.sidebar.error("CSV must contain: Ticker, Type, Shares, Purchase Price, Transaction Fee, Purchase Date")
     except Exception as e:
-        st.sidebar.error(f"Error: {e}")
+        st.sidebar.error(f"Error processing file: {e}")
 
 # --- MAIN PAGE ---
 st.header("Your Transaction Ledger")
-st.caption(f"? Tip: All live prices and dividends are automatically converted into **{base_currency}**.")
+st.caption(f"✨ Tip: All live prices and dividends are automatically converted into **{base_currency}**.")
 
 if not st.session_state.portfolio.empty:
     portfolio_data = st.session_state.portfolio.copy()
@@ -182,7 +193,6 @@ if not st.session_state.portfolio.empty:
     cols = ['Ticker', 'Type', 'Shares', 'Purchase Price', 'Transaction Fee', 'Purchase Date', f'Live Price ({base_currency})', f'Dividends ({base_currency})', f'Total Cost ({base_currency})', f'Current Value ({base_currency})', f'Total Return ({base_currency})', 'Return (%)', '% Weight']
     portfolio_data = portfolio_data[cols]
     
-    # FIX: Convert string dates to actual datetime objects so the table can render the calendar picker
     portfolio_data['Purchase Date'] = pd.to_datetime(portfolio_data['Purchase Date']).dt.date
     
     edited_df = st.data_editor(
@@ -205,7 +215,6 @@ if not st.session_state.portfolio.empty:
         }
     )
     
-    # FIX: Convert dates back to strings so we can compare them and save them safely
     edited_df['Purchase Date'] = pd.to_datetime(edited_df['Purchase Date']).dt.strftime('%Y-%m-%d')
     
     base_cols = ['Ticker', 'Type', 'Shares', 'Purchase Price', 'Transaction Fee', 'Purchase Date']
@@ -230,7 +239,7 @@ if not st.session_state.portfolio.empty:
     
     st.markdown("---")
     
-    st.subheader("?? 1-Year Performance Race")
+    st.subheader("📈 1-Year Performance Race")
     st.caption("This chart shows the percentage growth of your individual assets over the last 365 days.")
     
     unique_tickers = portfolio_data['Ticker'].unique().tolist()
